@@ -2,7 +2,6 @@ package com.dynamicisland.app.service
 
 import android.app.Notification
 import android.content.Intent
-import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.content.ContextCompat
@@ -10,6 +9,7 @@ import com.dynamicisland.app.data.model.IslandNotification
 import com.dynamicisland.app.data.repository.NotificationRepository
 import com.dynamicisland.app.data.repository.SettingsRepository
 import com.dynamicisland.app.util.AppIconProvider
+import com.dynamicisland.app.util.PermissionUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,11 +45,14 @@ class IslandNotificationListenerService : NotificationListenerService() {
         activeInstance = this
 
         // Asegura que el servicio overlay esté activo mientras haya listener.
-        // Usamos ContextCompat.startForegroundService: si se llamara aquí a
-        // startService() a secas, Android 8+ puede lanzar una
-        // IllegalStateException si el proceso está en segundo plano, ya que
-        // IslandOverlayService llama a startForeground() casi de inmediato.
-        ContextCompat.startForegroundService(this, Intent(this, IslandOverlayService::class.java))
+        // Solo lo arrancamos si el permiso de overlay está realmente concedido:
+        // si no lo está, IslandOverlayService lanzaría una BadTokenException al
+        // intentar dibujar la ventana, y como el servicio es START_STICKY,
+        // Android lo reiniciaría en bucle (esto es lo que puede sentirse como
+        // que "se traba el celular" al llegar cada notificación).
+        if (PermissionUtils.canDrawOverlays(this)) {
+            ContextCompat.startForegroundService(this, Intent(this, IslandOverlayService::class.java))
+        }
     }
 
     override fun onDestroy() {

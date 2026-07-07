@@ -31,6 +31,7 @@ import com.dynamicisland.app.ui.island.IslandComposable
 import com.dynamicisland.app.ui.island.IslandOverlayHost
 import com.dynamicisland.app.ui.island.IslandViewModel
 import com.dynamicisland.app.util.Constants
+import com.dynamicisland.app.util.PermissionUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,11 +47,25 @@ class IslandOverlayService : Service() {
     private var composeView: ComposeView? = null
     private var currentLayoutParams: WindowManager.LayoutParams? = null
 
+    private var setupFailed = false
+
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
         startForeground(Constants.OVERLAY_NOTIFICATION_ID, buildForegroundNotification())
+
+        // Si el permiso de overlay no está realmente concedido (puede pasar en
+        // HyperOS/MIUI incluso cuando Settings.canDrawOverlays ya decía que sí,
+        // o si el usuario lo revocó manualmente), no intentamos dibujar la
+        // ventana: eso lanzaría una excepción y, al ser START_STICKY, el
+        // sistema reiniciaría el servicio una y otra vez, degradando todo el
+        // teléfono. En su lugar, paramos el servicio de forma controlada.
+        if (!PermissionUtils.canDrawOverlays(this)) {
+            setupFailed = true
+            stopSelf()
+            return
+        }
 
         val settingsRepository = SettingsRepository.getInstance(this)
         islandViewModel = IslandViewModel(applicationContext, serviceScope, settingsRepository)
@@ -60,6 +75,7 @@ class IslandOverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (setupFailed) return START_NOT_STICKY
         // START_STICKY: si el sistema mata el proceso por memoria, HyperOS
         // lo relanza automáticamente para que la isla siga disponible.
         return START_STICKY
@@ -69,7 +85,9 @@ class IslandOverlayService : Service() {
 
     override fun onDestroy() {
         removeOverlayView()
-        overlayHost.onDestroy()
+        if (::overlayHost.isInitialized) {
+            overlayHost.onDestroy()
+        }
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -130,7 +148,16 @@ class IslandOverlayService : Service() {
         }
 
         composeView = view
-        windowManager.addView(view, params)
+        try {
+            windowManager.addView(view, params)
+        } catch (e: Exception) {
+            // Algunos fabricantes (HyperOS/MIUI incluidos) pueden denegar la
+            // ventana overlay pese a que el permiso parezca concedido. Evitamos
+            // que esto tumbe el servicio y provoque un bucle de reinicios.
+            composeView = null
+            setupFailed = true
+            stopSelf()
+        }
     }
 
     private fun removeOverlayView() {
