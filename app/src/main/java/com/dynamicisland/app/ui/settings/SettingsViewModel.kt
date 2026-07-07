@@ -6,10 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.dynamicisland.app.data.model.IslandSettings
 import com.dynamicisland.app.data.repository.SettingsRepository
 import com.dynamicisland.app.util.AppIconProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -22,8 +26,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         initialValue = IslandSettings()
     )
 
-    /** Apps lanzables del dispositivo, para que el usuario elija cuáles mostrar. */
-    val installedApps: List<Pair<String, String>> by lazy { iconProvider.getLaunchableApps() }
+    /**
+     * Apps lanzables del dispositivo, para que el usuario elija cuáles mostrar.
+     * Se calcula en un hilo de fondo: recorrer el PackageManager y pedir el
+     * nombre de cada app instalada es una operación pesada de IO/CPU que, si
+     * se hace en el hilo principal (como hacía antes con `by lazy`), bloquea
+     * la pantalla varios segundos en dispositivos con muchas apps.
+     */
+    private val _installedApps = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val installedApps: StateFlow<List<Pair<String, String>>> = _installedApps.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val apps = withContext(Dispatchers.Default) { iconProvider.getLaunchableApps() }
+            _installedApps.value = apps
+        }
+    }
 
     fun updateCollapsedSize(widthDp: Float, heightDp: Float) = viewModelScope.launch {
         repository.updateCollapsedSize(widthDp, heightDp)

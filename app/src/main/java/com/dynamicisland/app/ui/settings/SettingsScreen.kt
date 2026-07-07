@@ -38,6 +38,7 @@ fun SettingsScreen(
     batteryExempted: Boolean
 ) {
     val settings by viewModel.settings.collectAsState()
+    val installedApps by viewModel.installedApps.collectAsState()
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Dynamic Island") }) }
@@ -166,7 +167,7 @@ fun SettingsScreen(
             item { Spacer(modifier = Modifier.height(16.dp)) }
             item { SectionTitle("Apps que muestran notificaciones") }
 
-            items(viewModel.installedApps) { (packageName, appName) ->
+            items(installedApps) { (packageName, appName) ->
                 AppToggleRow(
                     appName = appName,
                     checked = packageName in settings.enabledPackages,
