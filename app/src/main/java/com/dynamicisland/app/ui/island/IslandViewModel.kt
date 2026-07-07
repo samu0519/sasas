@@ -27,7 +27,7 @@ class IslandViewModel(
     private val scope: CoroutineScope,
     private val settingsRepository: SettingsRepository
 ) {
-    private val _state = MutableStateFlow<IslandState>(IslandState.Hidden)
+    private val _state = MutableStateFlow<IslandState>(IslandState.Collapsed)
     val state: StateFlow<IslandState> = _state.asStateFlow()
 
     private val _settings = MutableStateFlow(IslandSettings())
@@ -66,13 +66,9 @@ class IslandViewModel(
 
     private fun showNext() {
         val next = pendingQueue.pollFirst() ?: run {
+            // La píldora colapsada se queda siempre visible (como la Dynamic
+            // Island real): no hay temporizador que la oculte por completo.
             _state.value = IslandState.Collapsed
-            scope.launch {
-                delay(1500L)
-                if (_state.value == IslandState.Collapsed) {
-                    _state.value = IslandState.Hidden
-                }
-            }
             return
         }
         currentKey = next.key

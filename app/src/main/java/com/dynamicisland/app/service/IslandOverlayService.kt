@@ -10,13 +10,9 @@ import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
 import android.view.WindowManager
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -105,6 +101,7 @@ class IslandOverlayService : Service() {
             WindowManager.LayoutParams.WRAP_CONTENT,
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
@@ -134,17 +131,20 @@ class IslandOverlayService : Service() {
                 }
             }
 
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.TopCenter
-            ) {
-                IslandComposable(
-                    state = state,
-                    settings = settings,
-                    onTap = islandViewModel::onNotificationTapped,
-                    onDismiss = islandViewModel::onDismissTapped
-                )
-            }
+            // OJO: no envolver esto en un Box(Modifier.fillMaxSize()). La
+            // ventana es WRAP_CONTENT; si el contenido pide fillMaxSize(),
+            // Compose lo mide contra el espacio disponible (la pantalla
+            // entera) y la ventana termina ocupando toda la pantalla de forma
+            // invisible, bloqueando todos los toques aunque solo se vea la
+            // píldora pequeña. Dejamos que el propio IslandComposable defina
+            // su tamaño (ya lo hace con .width()/.height() animados) y que
+            // la ventana se ajuste a eso.
+            IslandComposable(
+                state = state,
+                settings = settings,
+                onTap = islandViewModel::onNotificationTapped,
+                onDismiss = islandViewModel::onDismissTapped
+            )
         }
 
         composeView = view
